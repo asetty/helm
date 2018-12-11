@@ -41,6 +41,7 @@ import (
 	// Import to initialize client auth plugins.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/helm/pkg/kube"
 	"k8s.io/helm/pkg/proto/hapi/services"
 	"k8s.io/helm/pkg/storage"
@@ -62,6 +63,8 @@ const (
 	tlsCertsEnvVar = "TILLER_TLS_CERTS"
 	// historyMaxEnvVar is the name of the env var for setting max history.
 	historyMaxEnvVar = "TILLER_HISTORY_MAX"
+	// k8sContextEnvVar is the name of the env var for the k8s context for tiller to use
+	k8sContextEnvVar = "K8S_AUTH_CONTEXT"
 
 	storageMemory    = "memory"
 	storageConfigMap = "configmap"
@@ -130,7 +133,8 @@ func start() {
 	healthSrv := health.NewServer()
 	healthSrv.SetServingStatus("Tiller", healthpb.HealthCheckResponse_NOT_SERVING)
 
-	clientset, err := kube.New(nil).KubernetesClientSet()
+	clientArgs := clientArgsFromEnv()
+	clientset, err := kube.New(clientArgs).KubernetesClientSet()
 	if err != nil {
 		logger.Fatalf("Cannot initialize Kubernetes connection: %s", err)
 	}
@@ -168,7 +172,7 @@ func start() {
 		env.Releases.MaxHistory = *maxHistory
 	}
 
-	kubeClient := kube.New(nil)
+	kubeClient := kube.New(clientArgs)
 	kubeClient.Log = newLogger("kube").Printf
 	env.KubeClient = kubeClient
 
@@ -274,6 +278,17 @@ func namespace() string {
 	}
 
 	return environment.DefaultTillerNamespace
+}
+
+func clientArgsFromEnv() genericclioptions.RESTClientGetter {
+	val := os.Getenv(k8sContextEnvVar)
+	if val == "" {
+		return nil
+
+	}
+	flags := genericclioptions.NewConfigFlags(false)
+	flags.Context = &val
+	return flags
 }
 
 func tlsOptions() tlsutil.Options {
