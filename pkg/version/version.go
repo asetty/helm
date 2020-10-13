@@ -29,7 +29,7 @@ var (
 	Version = "v2.16"
 
 	// BuildMetadata is extra build time data
-	BuildMetadata = "unreleased"
+	BuildMetadata = "arista"
 	// GitCommit is the git sha1
 	GitCommit = ""
 	// GitTreeState is the state of the git tree
