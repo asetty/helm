@@ -995,6 +995,10 @@ func (c *Client) watchUntilReady(timeout time.Duration, info *resource.Info) err
 	kind := info.Mapping.GroupVersionKind.Kind
 	c.Log("Watching for changes to %s %s in %s with timeout of %v", kind, info.Name, info.Namespace, timeout)
 
+	if kind == "Job" {
+		c.waitForJobPolling()
+	}
+
 	// What we watch for depends on the Kind.
 	// - For a Job, we watch for completion.
 	// - For all else, we watch until Ready.
@@ -1014,6 +1018,7 @@ func (c *Client) watchUntilReady(timeout time.Duration, info *resource.Info) err
 			if kind == "Job" {
 				return c.waitForJob(e, info.Name)
 			}
+
 			return true, nil
 		case watch.Deleted:
 			c.Log("Deleted event for %s", info.Name)
@@ -1049,6 +1054,28 @@ func (c *Client) waitForJob(e watch.Event, name string) (bool, error) {
 
 	c.Log("%s: Jobs active: %d, jobs failed: %d, jobs succeeded: %d", name, job.Status.Active, job.Status.Failed, job.Status.Succeeded)
 	return false, nil
+}
+
+func (c *Client) waitForJobPolling(timeout time.Duration, info *resource.Info) error {
+	kcs, err := c.KubernetesClientSet()
+	if err != nil {
+		return err
+	}
+	// wait for job status to change
+	return wait.Poll(2*time.Second, timeout, func() (bool, error) {
+		job, err := kcs.BatchV1().Jobs(info.Namespace).Get(info.Name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		for _, c := range job.Status.Conditions {
+			if c.Type == batch.JobComplete && c.Status == v1.ConditionTrue {
+				return true, nil
+			} else if c.Type == batch.JobFailed && c.Status == v1.ConditionTrue {
+				return true, fmt.Errorf("Job failed: %s", c.Reason)
+			}
+		}
+		return false, nil
+	})
 }
 
 // scrubValidationError removes kubectl info from the message.
