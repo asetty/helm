@@ -996,7 +996,7 @@ func (c *Client) watchUntilReady(timeout time.Duration, info *resource.Info) err
 	c.Log("Watching for changes to %s %s in %s with timeout of %v", kind, info.Name, info.Namespace, timeout)
 
 	if kind == "Job" {
-		c.waitForJobPolling()
+		c.waitForJobPolling(timeout, info)
 	}
 
 	// What we watch for depends on the Kind.
